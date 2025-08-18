@@ -1,0 +1,66 @@
+#include <SPI.h>
+#include <mcp2515.h>
+
+struct can_frame canMsg;
+MCP2515 mcp2515(10); // Chip Select chân D10
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial); // Chờ kết nối Serial
+  
+  SPI.begin();
+  
+  Serial.println("Bắt đầu khởi tạo MCP2515...");
+  
+  // Reset module
+  mcp2515.reset();
+  
+  // Cấu hình tốc độ - Sử dụng giá trị số thay vì CAN_OK
+  int result = mcp2515.setBitrate(CAN_250KBPS, MCP_8MHZ);
+  
+  if (result == 0) { // 0 có nghĩa là thành công
+    Serial.println("Cấu hình tốc độ thành công!");
+  } else {
+    Serial.print("Lỗi cấu hình: ");
+    Serial.println(result);
+    Serial.println("Mã lỗi phổ biến:");
+    Serial.println("1: Lỗi SPI");
+    Serial.println("2: Không nhận diện được chip");
+    Serial.println("3: Lỗi cấu hình");
+  }
+  
+  // Chuyển sang chế độ hoạt động bình thường
+  mcp2515.setNormalMode();
+  
+  Serial.println("Khởi tạo hoàn tất, sẵn sàng nhận dữ liệu...");
+}
+
+void loop() {
+  // Kiểm tra và đọc khung CAN
+  if (mcp2515.readMessage(&canMsg) == 0) { // 0 = MCP2515::ERROR_OK
+    Serial.print(millis());
+    Serial.print(" | ID: 0x");
+    Serial.print(canMsg.can_id, HEX);
+    Serial.print(" | DLC:");
+    Serial.print(canMsg.can_dlc);
+    Serial.print(" | Data:");
+    
+    for (int i = 0; i < canMsg.can_dlc; i++) {
+      Serial.print(" 0x");
+      if (canMsg.data[i] < 0x10) Serial.print('0');
+      Serial.print(canMsg.data[i], HEX);
+    }
+    Serial.println();
+  }
+  
+  // Kiểm tra lỗi định kỳ
+  static uint32_t lastCheck = 0;
+  if (millis() - lastCheck > 1000) {
+    lastCheck = millis();
+    uint8_t errFlag = mcp2515.getErrorFlags();
+    if (errFlag != 0) {
+      Serial.print("Lỗi CAN: 0x");
+      Serial.println(errFlag, HEX);
+    }
+  }
+}
