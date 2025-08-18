@@ -1,0 +1,52 @@
+#include <SPI.h>
+#include <mcp2515.h>
+
+struct can_frame canMsg;
+MCP2515 mcp2515(10);
+
+float lastVolt = 0.0;
+float lastSpeed = 0.0;
+unsigned long lastPrint = 0;
+
+void setup() {
+  Serial.begin(115200);
+  // while (!Serial);   // ⚠️ Bỏ dòng này cho LGT8F328P
+
+  SPI.begin();
+
+  Serial.println("Bắt đầu khởi tạo MCP2515...");
+
+  mcp2515.reset();
+
+  int result = mcp2515.setBitrate(CAN_250KBPS, MCP_8MHZ);
+  if (result == 0) Serial.println("Cấu hình tốc độ thành công!");
+  else {
+    Serial.print("Lỗi cấu hình: ");
+    Serial.println(result);
+  }
+
+  mcp2515.setNormalMode();
+  Serial.println("Khởi tạo hoàn tất, sẵn sàng nhận dữ liệu...");
+}
+
+void loop() {
+  if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
+    if ((canMsg.can_id & 0x7FF) == 0x602 && canMsg.can_dlc >= 8) {
+      uint16_t rawSpeed = canMsg.data[4] | (canMsg.data[5] << 8);
+      uint16_t rawVolt  = canMsg.data[6] | (canMsg.data[7] << 8);
+
+      lastSpeed = rawSpeed * 0.1;
+      lastVolt  = rawVolt * 0.1;
+    }
+  }
+
+  if (millis() - lastPrint >= 500) {
+    lastPrint = millis();
+    Serial.print(lastPrint);
+    Serial.print(" | Speed: ");
+    Serial.print(lastSpeed, 1);
+    Serial.print(" km/h | Volt: ");
+    Serial.print(lastVolt, 1);
+    Serial.println(" V");
+  }
+}
